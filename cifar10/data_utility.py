@@ -116,17 +116,15 @@ def _random_crop(batch, crop_shape, padding=None):
         
         if padding:
             oshape = (oshape[1] + 2*padding, oshape[2] + 2*padding)
-        new_batch = []
-        npad = ((padding, padding), (padding, padding), (0, 0))
+        new_batch = np.array(batch)
+        npad = ((0, 0),(padding, padding), (padding, padding))
         for i in range(len(batch)):
-            new_batch.append(batch[i])
             if padding:
-                new_batch[i] = np.lib.pad(batch[i], pad_width=npad,
+                temp = np.lib.pad(batch[i], pad_width=npad,
                                           mode='constant', constant_values=0)
             nh = random.randint(0, oshape[0] - crop_shape[0])
             nw = random.randint(0, oshape[1] - crop_shape[1])
-            new_batch[i] = new_batch[i][nh:nh + crop_shape[0],
-                                        nw:nw + crop_shape[1]]
+            new_batch[i] = temp[:, nh:nh + crop_shape[0], nw:nw + crop_shape[1]]
         return new_batch
 
 def _random_flip_leftright(batch):
@@ -149,3 +147,4 @@ def color_preprocessing(x_train,x_test):
 def data_augmentation(batch):
     batch = _random_flip_leftright(batch)
     batch = _random_crop(batch, [IMAGE_SIZE,IMAGE_SIZE], 4)
+    return batch

@@ -471,7 +471,7 @@ def train(INIT_NET, PREDICT_NET, epochs, batch_size, device_opts) :
         
         for i in range(0, 50000//batch_size + 1):
             data, label = next_batch(batch_size, train_x, train_y)
-            data_augmentation(data)
+            data = data_augmentation(data)
 
             workspace.FeedBlob("data", data, device_option=device_opts)
             workspace.FeedBlob("label", label, device_option=device_opts)

@@ -178,6 +178,7 @@ def SaveNet(INIT_NET, PREDICT_NET, workspace, model):
         f.write(model.net._net.SerializeToString())
     with open(INIT_NET, 'wb') as f:
         f.write(init_net.SerializeToString())
+    print("== saved init_net and predict_net. ==")
 
 def LoadNet(INIT_NET, PREDICT_NET, device_opts):
     init_def = caffe2_pb2.NetDef()
@@ -191,6 +192,7 @@ def LoadNet(INIT_NET, PREDICT_NET, device_opts):
         net_def.ParseFromString(f.read())
         net_def.device_option.CopyFrom(device_opts)
         workspace.CreateNet(net_def.SerializeToString(), overwrite=True)
+    print("== loaded init_net and predict_net. ==")
 
 def DoTrain():
     # Check workspace's root folder & reset
@@ -204,6 +206,7 @@ def DoTrain():
 
     arg_scope = {"order": "NCHW"}
     
+    # == Training model. ==
     # Initialize with ModelHelper class
     train_model = model_helper.ModelHelper(name="train_net", arg_scope=arg_scope)
 
@@ -216,10 +219,30 @@ def DoTrain():
         device_opts=DEVICE_OPTS
         )
     # Add model definition, save return value to 'softmax' variable
-    softmax = AddModel(train_model, data, DEVICE_OPTS)
+    softmax = AddModel(train_model, data, DEVICE_OPTS,False)
     # Add training operators using the softmax output from the model
     AddTrainingOperators(train_model, softmax, label, DEVICE_OPTS)
 
+    # Initialize and create the training network
+    workspace.RunNetOnce(train_model.param_init_net)
+    workspace.CreateNet(train_model.net, overwrite=True)
+
+    # Set the iterations number and track the accuracy & loss
+    accuracy = np.zeros(TRAINING_ITERS)
+    loss = np.zeros(TRAINING_ITERS)
+
+    # MAIN TRAINING LOOP!
+    print("== Start training... ==")
+    for i in range(TRAINING_ITERS):
+        workspace.RunNet(train_model.net)
+        accuracy[i] = workspace.blobs['accuracy']
+        loss[i] = workspace.blobs['loss']
+        # Check the accuracy and loss every so often
+        if i % 50 == 0:
+            print("Iter: {:5d}, Loss: {:.4f}, Accuracy: {:.4f}".format(i, loss[i], accuracy[i]))
+    print("== Done. ==")
+
+    # == Testing model. ==
     test_model = model_helper.ModelHelper(
         name="test_net", 
         arg_scope=arg_scope, 
@@ -234,36 +257,8 @@ def DoTrain():
         device_opts=DEVICE_OPTS
         )
 
-    softmax = AddModel(test_model, data, DEVICE_OPTS)
+    softmax = AddModel(test_model, data, DEVICE_OPTS, True)
     AddAccuracy(test_model, softmax, label, DEVICE_OPTS)
-
-    # Deployment model. 
-    # We simply need the main AddModel part.
-    deploy_model = model_helper.ModelHelper(
-        name="deploy_net", 
-        arg_scope=arg_scope, 
-        init_params=False
-        )
-    AddModel(deploy_model, "data", DEVICE_OPTS, True)
-
-    # Initialize and create the training network
-    workspace.RunNetOnce(train_model.param_init_net)
-    workspace.CreateNet(train_model.net, overwrite=True)
-
-    # Set the iterations number and track the accuracy & loss
-    accuracy = np.zeros(TRAINING_ITERS)
-    loss = np.zeros(TRAINING_ITERS)
-
-    # MAIN TRAINING LOOP!
-    print("Start training...")
-    for i in range(TRAINING_ITERS):
-        workspace.RunNet(train_model.net)
-        accuracy[i] = workspace.blobs['accuracy']
-        loss[i] = workspace.blobs['loss']
-        # Check the accuracy and loss every so often
-        if i % 50 == 0:
-            print("Iter: {:5d}, Loss: {:.4f}, Accuracy: {:.4f}".format(i, loss[i], accuracy[i]))
-    print("Done.")
 
     # param_init_net here will only create a data reader
     # Other parameters won't be re-created because we selected [init_params=False] before
@@ -283,9 +278,18 @@ def DoTrain():
         
     print('test_accuracy: {:.4f}'.format(test_accuracy.mean()))
     
+    # == Deployment model. ==
+    # We simply need the main AddModel part.
+    deploy_model = model_helper.ModelHelper(
+        name="deploy_net", 
+        arg_scope=arg_scope, 
+        init_params=False
+        )
+
+    AddModel(deploy_model, "data", DEVICE_OPTS, True)
+
     # Save INIT_NET & PREDICT_NET
     SaveNet(INIT_NET, PREDICT_NET, workspace, deploy_model)
-
 
 def DoImageTest():
     

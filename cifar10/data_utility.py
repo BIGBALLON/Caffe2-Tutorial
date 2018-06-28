@@ -12,7 +12,24 @@ CLASS_NUM      = 10
 IMAGE_SIZE     = 32
 IMG_CHANNELS   = 3
 
-def next_batch(batch_size, data, labels):
+def dummy_input():
+    data = np.zeros((1,3,32,32))
+    label = 1
+    return np.array(data).astype('float32'), np.array(label).astype('int32')
+
+# Get the batch in order
+def next_batch(i, batch_size, data, labels, total_size=50000):
+    index = i * batch_size
+    if index + batch_size < total_size:
+        batch_x = data[index:index + batch_size]
+        batch_y = labels[index:index + batch_size]
+    else:
+        batch_x = data[index:]
+        batch_y = labels[index:]
+    return batch_x, batch_y
+
+# Randomly sample from data
+def next_batch_random(batch_size, data, labels):
     idx = np.arange(0 , len(data))
     np.random.shuffle(idx)
     idx = idx[:batch_size]
@@ -22,10 +39,10 @@ def next_batch(batch_size, data, labels):
     return np.array(data_shuffle, dtype='float32'), np.array(labels_shuffle, dtype='int32')
 
 def try_to_download():
-    dirname  = 'cifar-10-batches-py'
-    origin   = 'http://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
-    fname    = 'cifar-10-python.tar.gz'
-    fpath    = './' + dirname
+    dirname = 'cifar-10-batches-py'
+    origin = 'http://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'
+    fname = 'cifar-10-python.tar.gz'
+    fpath = './'.join(dirname)
 
     download = True
     if os.path.exists(fpath) or os.path.isfile(fname):
@@ -87,7 +104,7 @@ def load_data(files, data_dir, label_count):
     return data, labels
 
 def prepare_data():
-    print("======Loading data======")
+    print("== Loading data ==")
     try_to_download()
     data_dir = './cifar-10-batches-py'
     image_dim = IMAGE_SIZE * IMAGE_SIZE * IMG_CHANNELS
@@ -101,13 +118,12 @@ def prepare_data():
 
     print("Train data:",np.shape(train_data), np.shape(train_labels))
     print("Test data :",np.shape(test_data), np.shape(test_labels))
-    print("======Load finished======")
 
-    print("======Shuffling data======")
+    print("== Shuffling data ==")
     indices = np.random.permutation(len(train_data))
     train_data = train_data[indices]
     train_labels = train_labels[indices]
-    print("======Prepare Finished======")
+    print("== Prepare Finished ==")
 
     return train_data, train_labels, test_data, test_labels
 
@@ -136,7 +152,7 @@ def _random_flip_leftright(batch):
 def color_preprocessing(x_train,x_test):
     x_train = x_train.astype('float32')
     x_test = x_test.astype('float32')
-    # BGR 
+    # BGR std & mean
     mean = [113.865, 122.95, 125.307]
     std  = [66.7048, 62.0887, 62.9932]
     for i in range(3):

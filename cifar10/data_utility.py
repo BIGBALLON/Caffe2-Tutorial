@@ -134,6 +134,7 @@ def _random_crop(batch, crop_shape, padding=None):
             oshape = (oshape[1] + 2*padding, oshape[2] + 2*padding)
         new_batch = np.array(batch)
         npad = ((0, 0),(padding, padding), (padding, padding))
+    
         for i in range(len(batch)):
             if padding:
                 temp = np.lib.pad(batch[i], pad_width=npad,

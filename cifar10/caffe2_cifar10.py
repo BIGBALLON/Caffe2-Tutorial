@@ -28,33 +28,43 @@ USE_GPU = True
 USE_AUGMENTATION = False
 GPU_ID = 0
 BATCH_SIZE = 128
-EPOCHS = 240
-EVAL_FREQ = 5
+EPOCHS = 200
+EVAL_FREQ = 1
 TRAIN_IMAGES = 50000
-DEPTH = 8 # layers = depth * 6 + 2
+DEPTH = 5 # layers = depth * 6 + 2
 TEST_IMAGES = 10000
 INIT_NET = './init_net.pb'
 PREDICT_NET = './predict_net.pb'
 
 
-def add_accuracy(model, softmax, label, device_opts):
+def add_sortmax(model, last_out, device_opts):
     with core.DeviceScope(device_opts):
-        accuracy = brew.accuracy(model, [softmax, label], "accuracy")
+        softmax = brew.softmax(model, last_out, 'softmax')
+        return softmax
+
+def add_softmax_with_loss(model, last_out, device_opts):
+    with core.DeviceScope(device_opts):
+        softmax, loss = model.net.SoftmaxWithLoss([last_out, "label"], ["softmax", "loss"])
+        return softmax, loss
+
+def add_accuracy(model, softmax, device_opts):
+    with core.DeviceScope(device_opts):
+        accuracy = brew.accuracy(model, [softmax, "label"], "accuracy")
         return accuracy
 
-def add_training_operators(model, softmax, device_opts) :
+def add_training_operators(model, last_out, device_opts) :
 
     with core.DeviceScope(device_opts):
-        xent = model.LabelCrossEntropy([softmax, "label"], 'xent')
-        loss = model.AveragedLoss(xent, "loss")
-        brew.accuracy(model, [softmax, "label"], "accuracy")
+
+        softmax, loss = add_softmax_with_loss(model, last_out, device_opts)
+        accuracy = add_accuracy(model, softmax, device_opts)
 
         model.AddGradientOperators([loss])
         opt = optimizer.build_sgd(
             model, 
-            base_learning_rate=0.05, 
+            base_learning_rate=0.1, 
             policy="step", 
-            stepsize=50000 * 100 // BATCH_SIZE, 
+            stepsize=50000 * 80 // BATCH_SIZE, 
             weight_decay=1e-4,
             momentum=0.9, 
             gamma=0.1,
@@ -133,6 +143,7 @@ def eval(model, test_x, test_y):
     for i in range(0, batch_num):
         # data, label = next_batch(i, 1000, test_x, test_y, TEST_IMAGES)
         data, label = next_batch_random(1000, test_x, test_y)
+        
         workspace.FeedBlob("data", data, device_option=device_opts)
         workspace.FeedBlob("label", label, device_option=device_opts)
 
@@ -159,7 +170,7 @@ def do_train(init_net_pb, predict_net_pb, epochs, device_opts) :
     }
 
     train_model= model_helper.ModelHelper(name="train_net", arg_scope=train_arg_scope)
-    softmax = create_resnet(
+    last_out = create_resnet(
         model=train_model,
         data='data', 
         num_input_channels=3,
@@ -167,10 +178,10 @@ def do_train(init_net_pb, predict_net_pb, epochs, device_opts) :
         num_labels=10, 
         device_opts=device_opts,
         is_test=False)
-    add_training_operators(train_model, softmax, device_opts=device_opts)
+    add_training_operators(train_model, last_out, device_opts=device_opts)
 
     test_model= model_helper.ModelHelper(name="test_net", init_params=False)
-    softmax = create_resnet(
+    last_out = create_resnet(
         model=test_model,
         data='data', 
         num_input_channels=3,
@@ -178,7 +189,8 @@ def do_train(init_net_pb, predict_net_pb, epochs, device_opts) :
         num_labels=10, 
         device_opts=device_opts,
         is_test=True)
-    add_accuracy(test_model, softmax, "label", device_opts)
+    softmax, loss = add_softmax_with_loss(test_model, last_out, device_opts)
+    add_accuracy(test_model, softmax, device_opts)
 
     workspace.RunNetOnce(train_model.param_init_net)
     workspace.CreateNet(train_model.net)
@@ -226,7 +238,7 @@ def do_train(init_net_pb, predict_net_pb, epochs, device_opts) :
 
     # save net to forward !!
     deploy_model= model_helper.ModelHelper(name="deploy_net", init_params=False)
-    create_resnet(
+    last_out = create_resnet(
         model=deploy_model,
         data='data', 
         num_input_channels=3,
@@ -234,6 +246,7 @@ def do_train(init_net_pb, predict_net_pb, epochs, device_opts) :
         num_labels=10, 
         device_opts=device_opts,
         is_test=True)
+    add_sortmax(deploy_model, last_out, device_opts)
 
     workspace.RunNetOnce(deploy_model.param_init_net)
     workspace.CreateNet(deploy_model.net, overwrite=True)
@@ -253,7 +266,8 @@ def do_test():
     print ('== done. ==')
 
     print ("\nInput: ones")
-    print ("Output:", workspace.FetchBlob("softmax"))
+    print ("Output last_out:\n", workspace.FetchBlob("last_out"))
+    print ("Output softmax:\n", workspace.FetchBlob("softmax"))
     print ("Output class: ", np.argmax(workspace.FetchBlob("softmax"),axis=1))
     print ("Real class  : ", label)
 

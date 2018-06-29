@@ -168,7 +168,7 @@ def create_resnet(
         brew.relu(model, 'last_spatbn', 'last_relu')
         # Final layers
         brew.average_pool(model, 'last_relu', 'final_avg', kernel=8, stride=1)
-        brew.fc(model, 'final_avg', 'last_out', 64, num_labels)
-        softmax = brew.softmax(model, 'last_out', 'softmax')
-        return softmax
+        last_out = brew.fc(model, 'final_avg', 'last_out', 64, num_labels)
+        
+        return last_out
 

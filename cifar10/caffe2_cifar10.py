@@ -25,7 +25,7 @@ import tabulate
 import numpy as np
 
 USE_GPU = True
-USE_AUGMENTATION = False
+USE_AUGMENTATION = True
 GPU_ID = 0
 BATCH_SIZE = 128
 EPOCHS = 200

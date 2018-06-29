@@ -127,27 +127,32 @@ def prepare_data():
 
     return train_data, train_labels, test_data, test_labels
 
-def _random_crop(batch, crop_shape, padding=None):
+def _random_flip_leftright(batch):
+    for i in range(batch.shape[0]):
+       batch[i] = horizontal_flip(batch[i])
+    return batch
+
+def horizontal_flip(image, rate=0.5):
+    if np.random.rand() < rate:
+        image = image[:, :, ::-1]
+    return image
+
+def _random_crop(batch, crop_shape=[32,32], padding=4):
         oshape = np.shape(batch[0])
-        
-        if padding:
-            oshape = (oshape[1] + 2*padding, oshape[2] + 2*padding)
-        new_batch = np.array(batch)
-        npad = ((0, 0),(padding, padding), (padding, padding))
-    
+        oshape = (oshape[1] + 2*padding, oshape[2] + 2*padding)
+        new_batch = np.zeros((batch.shape[0], 3, 40, 40))
+        npad = ((0, 0), (padding, padding), (padding, padding))
         for i in range(len(batch)):
-            if padding:
-                temp = np.lib.pad(batch[i], pad_width=npad,
-                                          mode='constant', constant_values=0)
+            new_batch[i] = np.lib.pad(
+                batch[i], 
+                pad_width=npad,
+                mode='constant', 
+                constant_values=0
+                )
             nh = random.randint(0, oshape[0] - crop_shape[0])
             nw = random.randint(0, oshape[1] - crop_shape[1])
-            new_batch[i] = temp[:, nh:nh + crop_shape[0], nw:nw + crop_shape[1]]
-        return new_batch
-
-def _random_flip_leftright(batch):
-        for i in range(batch.shape[0]):
-            if bool(random.getrandbits(1)):
-                batch[i] = np.fliplr(batch[i])
+            batch[i] = new_batch[i][:, nh:nh + crop_shape[0],
+                                        nw:nw + crop_shape[1]]
         return batch
 
 def color_preprocessing(x_train,x_test):
@@ -160,9 +165,9 @@ def color_preprocessing(x_train,x_test):
         x_train[:,i,:,:] = (x_train[:,i,:,:] - mean[i]) / std[i]
         x_test[:,i,:,:]  = (x_test[:,i,:,:]  - mean[i]) / std[i]
 
-    return x_train / 255.0, x_test / 255.0
+    return x_train, x_test
 
 def data_augmentation(batch):
     batch = _random_flip_leftright(batch)
-    batch = _random_crop(batch, [IMAGE_SIZE,IMAGE_SIZE], 4)
+    batch = _random_crop(batch)
     return batch

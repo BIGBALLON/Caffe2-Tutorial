@@ -52,6 +52,14 @@ def add_accuracy(model, softmax, device_opts):
         accuracy = brew.accuracy(model, [softmax, "label"], "accuracy")
         return accuracy
 
+def get_lr_blob_name(opt, use_gpu=USE_GPU):
+    if use_gpu:
+        lr_blob_name = opt.get_gpu_blob_name('lr', 0, '')
+    else:
+        lr_blob_name = opt.get_gpu_blob_name('lr')
+    return workspace.FetchBlob(lr_blob_name)
+
+
 def add_training_operators(model, last_out, device_opts) :
 
     with core.DeviceScope(device_opts):
@@ -76,6 +84,7 @@ def add_training_operators(model, last_out, device_opts) :
         #     base_learning_rate=1e-3,
         #     weight_decay=1e-4,
         #     )
+        return opt
 
 
 def save_net(init_net_pb, predict_net_pb, model):
@@ -178,7 +187,7 @@ def do_train(init_net_pb, predict_net_pb, epochs, device_opts) :
         num_labels=10, 
         device_opts=device_opts,
         is_test=False)
-    add_training_operators(train_model, last_out, device_opts=device_opts)
+    opt = add_training_operators(train_model, last_out, device_opts=device_opts)
 
     test_model= model_helper.ModelHelper(name="test_net", init_params=False)
     last_out = create_resnet(
@@ -214,10 +223,7 @@ def do_train(init_net_pb, predict_net_pb, epochs, device_opts) :
             test_res = {'loss': None, 'accuracy': None}
         
         time_ep = time.time() - time_ep
-
-        lr = workspace.FetchBlob("SgdOptimizer_0_lr_gpu0")
-        # lr = workspace.FetchBlob("AdamOptimizer_0_lr_gpu0")
-
+        lr = get_lr_blob_name(opt)
         values = [
             e + 1, 
             lr, 

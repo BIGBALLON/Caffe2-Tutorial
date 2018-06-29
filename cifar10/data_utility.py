@@ -21,7 +21,7 @@ def dummy_input():
 def next_batch(i, batch_size, data, labels, total_size=50000):
     index = i * batch_size
     if index + batch_size < total_size:
-        batch_x = data[index:index + batch_size]
+        batch_x = data[index:index + batch_size] 
         batch_y = labels[index:index + batch_size]
     else:
         batch_x = data[index:]
@@ -158,7 +158,8 @@ def color_preprocessing(x_train,x_test):
     for i in range(3):
         x_train[:,i,:,:] = (x_train[:,i,:,:] - mean[i]) / std[i]
         x_test[:,i,:,:]  = (x_test[:,i,:,:]  - mean[i]) / std[i]
-    return x_train, x_test
+
+    return x_train / 255.0, x_test / 255.0
 
 def data_augmentation(batch):
     batch = _random_flip_leftright(batch)

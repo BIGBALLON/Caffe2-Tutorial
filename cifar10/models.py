@@ -1,60 +1,53 @@
 from caffe2.python import core, brew
 
-def create_lenet(model, device_opts, is_test=False) :
+def create_lenet(model, device_opts) :
     with core.DeviceScope(device_opts):
         conv1 = brew.conv(
             model, 
             'data', 
             'conv1', 
             dim_in=3, 
-            dim_out=32, 
+            dim_out=6, 
             weight_init=('MSRAFill', {}),
             kernel=5, 
             stride=1, 
             pad=0)
-        brew.spatial_bn(
-            model, 'conv1', 'conv1_spatbn', 32, epsilon=1e-3, is_test=is_test
-        )
-        relu1 = brew.relu(model, 'conv1_spatbn', 'relu1')
-        # relu1 = brew.relu(model, conv1, 'relu1')
+        relu1 = brew.relu(model, conv1, 'relu1')
         pool1 = brew.max_pool(model, relu1, 'pool1', kernel=2, stride=2)
         
         conv2 = brew.conv(
             model, 
             pool1, 
             'conv2', 
-            dim_in=32, 
-            dim_out=64, 
+            dim_in=6, 
+            dim_out=16, 
             weight_init=('MSRAFill', {}),
             kernel=5, 
             stride=1, 
             pad=0)
-        brew.spatial_bn(model, 'conv2', 'conv2_spatbn', 64, epsilon=1e-3, is_test=is_test)
-        relu2 = brew.relu(model, 'conv2_spatbn', 'relu2')
-        # relu2 = brew.relu(model, conv2, 'relu2')
+        relu2 = brew.relu(model, conv2, 'relu2')
         pool2 = brew.max_pool(model, relu2, 'pool2', kernel=2, stride=2)
         
         # Fully connected layers
-        fc1 = brew.fc(model, pool2, 'fc1', dim_in=64*5*5, dim_out=256)
+        fc1 = brew.fc(model, pool2, 'fc1', dim_in=16*5*5, dim_out=120)
         relu3 = brew.relu(model, fc1, 'relu3')
         
-        fc2 = brew.fc(model, relu3, 'fc2', dim_in=256, dim_out=256)
+        fc2 = brew.fc(model, relu3, 'fc2', dim_in=120, dim_out=84)
         relu4 = brew.relu(model, fc2, 'relu4')
 
-        fc3 = brew.fc(model, relu4, 'fc3', dim_in=256, dim_out=10)
+        fc3 = brew.fc(model, relu4, 'fc3', dim_in=84, dim_out=10)
         # Softmax layer
         softmax = brew.softmax(model, fc3, 'softmax')
         return softmax
 
 class ResNetBuilder():
 
-    def __init__(self, model, prev_blob, no_bias, is_test, spatial_bn_mom=0.9):
+    def __init__(self, model, prev_blob, no_bias, is_test):
         self.model = model
         self.comp_count = 0
         self.comp_idx = 0
         self.prev_blob = prev_blob
         self.is_test = is_test
-        self.spatial_bn_mom = spatial_bn_mom
         self.no_bias = 1 if no_bias else 0
 
     def add_conv(self, in_filters, out_filters, kernel, stride=1, pad=0):
@@ -87,8 +80,7 @@ class ResNetBuilder():
             self.prev_blob,
             'comp_%d_spatbn_%d' % (self.comp_count, self.comp_idx),
             num_filters,
-            epsilon=1e-3,
-            momentum=self.spatial_bn_mom,
+            epsilon=1e-5,
             is_test=self.is_test,
             )
         return self.prev_blob
@@ -142,37 +134,40 @@ class ResNetBuilder():
             'comp_%d_sum_%d' % (self.comp_count, self.comp_idx),
             )
         self.comp_idx += 1
-        # Keep track of number of high level components if this ResNetBuilder
         self.comp_count += 1
 
-
-def create_resnet_32x32(
-    model, data, num_input_channels, num_groups, num_labels, device_opts, is_test=False,
+def create_resnet(
+    model, data,
+    num_input_channels,
+    num_groups,
+    num_labels,
+    device_opts,
+    is_test=False,
     ):
     with core.DeviceScope(device_opts):
-
-        brew.conv(model, data, 'conv1', num_input_channels, 16, kernel=3, stride=1)
-
         filters = [16, 32, 64]
+        brew.conv(model, data, 'conv1', num_input_channels, 16, no_bias=1, kernel=3, stride=1)
 
-        builder = ResNetBuilder(model, 'conv1', no_bias=0, is_test=is_test)
-        prev_filters = 16
-        for groupidx in range(0, 3):
-            for blockidx in range(0, num_groups):
-                builder.add_simple_block(
-                    prev_filters if blockidx == 0 else filters[groupidx],
-                    filters[groupidx],
-                    down_sampling=(True if blockidx == 0 and
-                                   groupidx > 0 else False))
-                    
-            prev_filters = filters[groupidx]
+        builder = ResNetBuilder(model, 'conv1', no_bias=1, is_test=is_test)
 
-        brew.spatial_bn(model, builder.prev_blob, 'last_spatbn', 64, epsilon=1e-3, is_test=is_test)
+        # input: 32x32x16 output: 32x32x16
+        for _ in range(num_groups):
+            builder.add_simple_block(16, 16, down_sampling=False)
+
+        # input: 32x32x16 output: 16x16x32
+        builder.add_simple_block(16, 32, down_sampling=True)
+        for _ in range(1,num_groups):
+            builder.add_simple_block(32, 32, down_sampling=False)
+
+        # input: 16x16x32 output: 8x8x64
+        builder.add_simple_block(32, 64, down_sampling=True)
+        for _ in range(1,num_groups):
+            builder.add_simple_block(64, 64, down_sampling=False)
+
+        brew.spatial_bn(model, builder.prev_blob, 'last_spatbn', 64, epsilon=1e-5, is_test=is_test)
         brew.relu(model, 'last_spatbn', 'last_relu')
         # Final layers
-        brew.average_pool(
-            model, 'last_relu', 'final_avg', kernel=8, stride=1
-        )
+        brew.average_pool(model, 'last_relu', 'final_avg', kernel=8, stride=1)
         brew.fc(model, 'final_avg', 'last_out', 64, num_labels)
         softmax = brew.softmax(model, 'last_out', 'softmax')
         return softmax

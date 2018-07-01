@@ -1,45 +1,5 @@
 from caffe2.python import core, brew
 
-def create_lenet(model, device_opts) :
-    with core.DeviceScope(device_opts):
-        conv1 = brew.conv(
-            model, 
-            'data', 
-            'conv1', 
-            dim_in=3, 
-            dim_out=6, 
-            weight_init=('MSRAFill', {}),
-            kernel=5, 
-            stride=1, 
-            pad=0)
-        relu1 = brew.relu(model, conv1, 'relu1')
-        pool1 = brew.max_pool(model, relu1, 'pool1', kernel=2, stride=2)
-        
-        conv2 = brew.conv(
-            model, 
-            pool1, 
-            'conv2', 
-            dim_in=6, 
-            dim_out=16, 
-            weight_init=('MSRAFill', {}),
-            kernel=5, 
-            stride=1, 
-            pad=0)
-        relu2 = brew.relu(model, conv2, 'relu2')
-        pool2 = brew.max_pool(model, relu2, 'pool2', kernel=2, stride=2)
-        
-        # Fully connected layers
-        fc1 = brew.fc(model, pool2, 'fc1', dim_in=16*5*5, dim_out=120)
-        relu3 = brew.relu(model, fc1, 'relu3')
-        
-        fc2 = brew.fc(model, relu3, 'fc2', dim_in=120, dim_out=84)
-        relu4 = brew.relu(model, fc2, 'relu4')
-
-        fc3 = brew.fc(model, relu4, 'fc3', dim_in=84, dim_out=10)
-        # Softmax layer
-        softmax = brew.softmax(model, fc3, 'softmax')
-        return softmax
-
 class ResNetBuilder():
 
     def __init__(self, model, prev_blob, no_bias, is_test):
@@ -80,7 +40,7 @@ class ResNetBuilder():
             self.prev_blob,
             'comp_%d_spatbn_%d' % (self.comp_count, self.comp_idx),
             num_filters,
-            epsilon=1e-5,
+            epsilon=1e-3,
             is_test=self.is_test,
             )
         return self.prev_blob
@@ -164,7 +124,7 @@ def create_resnet(
         for _ in range(1,num_groups):
             builder.add_simple_block(64, 64, down_sampling=False)
 
-        brew.spatial_bn(model, builder.prev_blob, 'last_spatbn', 64, epsilon=1e-5, is_test=is_test)
+        brew.spatial_bn(model, builder.prev_blob, 'last_spatbn', 64, epsilon=1e-3, is_test=is_test)
         brew.relu(model, 'last_spatbn', 'last_relu')
         # Final layers
         brew.average_pool(model, 'last_relu', 'final_avg', kernel=8, stride=1)

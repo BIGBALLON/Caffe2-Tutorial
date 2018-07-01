@@ -107,7 +107,6 @@ def prepare_data():
     print("== Loading data ==")
     try_to_download()
     data_dir = './cifar-10-batches-py'
-    image_dim = IMAGE_SIZE * IMAGE_SIZE * IMG_CHANNELS
     meta = unpickle( data_dir + '/batches.meta')
 
     label_names = meta[b'label_names']

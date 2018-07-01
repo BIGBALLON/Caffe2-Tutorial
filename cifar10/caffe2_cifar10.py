@@ -19,7 +19,7 @@ from data_utility import (
     next_batch_random,
     dummy_input,
     )
-from models import create_lenet, create_resnet
+from models import create_resnet
 import time
 import tabulate
 import numpy as np
@@ -86,7 +86,6 @@ def add_training_operators(model, last_out, device_opts) :
         #     )
         return opt
 
-
 def save_net(init_net_pb, predict_net_pb, model):
     extra_params = []
     extra_blobs = []
@@ -144,7 +143,7 @@ def train_epoch(model, train_x, train_y):
         'accuracy': correct / batch_num * 100.0,
         }
 
-def eval(model, test_x, test_y):
+def do_evaluate(model, test_x, test_y):
     loss_sum = 0.0
     correct = 0.0
     batch_num = TEST_IMAGES // 1000
@@ -218,7 +217,7 @@ def do_train(init_net_pb, predict_net_pb, epochs, device_opts) :
         train_res = train_epoch(train_model, train_x, train_y)
 
         if e == 0 or e % EVAL_FREQ == 0 or e == epochs - 1:
-            test_res = eval(test_model, test_x, test_y)
+            test_res = do_evaluate(test_model, test_x, test_y)
         else:
             test_res = {'loss': None, 'accuracy': None}
         

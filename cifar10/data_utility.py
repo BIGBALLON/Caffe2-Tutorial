@@ -154,7 +154,7 @@ def _random_crop(batch, crop_shape=[32,32], padding=4):
                                         nw:nw + crop_shape[1]]
         return batch
 
-def color_preprocessing(x_train,x_test):
+def normalization(x_train,x_test):
     x_train = x_train.astype('float32')
     x_test = x_test.astype('float32')
     # BGR std & mean

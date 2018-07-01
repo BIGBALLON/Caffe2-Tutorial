@@ -105,7 +105,7 @@ def create_resnet(
     ):
     with core.DeviceScope(device_opts):
         filters = [16, 32, 64]
-        brew.conv(model, data, 'conv1', num_input_channels, 16, no_bias=1, kernel=3, stride=1)
+        brew.conv(model, data, 'conv1', num_input_channels, 16, no_bias=1, kernel=3, stride=1, pad=1)
 
         builder = ResNetBuilder(model, 'conv1', no_bias=1, is_test=is_test)
 

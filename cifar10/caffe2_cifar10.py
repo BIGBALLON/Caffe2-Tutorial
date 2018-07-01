@@ -83,7 +83,7 @@ def add_training_operators(model, last_out, device_opts) :
             model, 
             base_learning_rate=0.1, 
             policy="step", 
-            stepsize=50000 * 50 // args.batch_size, 
+            stepsize=50000 * 80 // args.batch_size, 
             weight_decay=1e-4,
             momentum=0.9, 
             gamma=0.1,
@@ -158,11 +158,11 @@ def train_epoch(model, train_x, train_y):
 def do_evaluate(model, test_x, test_y):
     loss_sum = 0.0
     correct = 0.0
-    batch_num = args.test_images // 1000
+    batch_num = args.test_images // 200
 
     for i in range(0, batch_num):
         # data, label = next_batch(i, 1000, test_x, test_y, args.test_images)
-        data, label = next_batch_random(1000, test_x, test_y)
+        data, label = next_batch_random(200, test_x, test_y)
         
         workspace.FeedBlob("data", data, device_option=device_opts)
         workspace.FeedBlob("label", label, device_option=device_opts)
@@ -177,7 +177,14 @@ def do_evaluate(model, test_x, test_y):
         'accuracy': correct / batch_num * 100.0,
         }
 
-def do_train(epochs, device_opts, use_gpu) :
+def do_train(
+    train_x,
+    train_y,
+    test_x,
+    test_y,
+    epochs, 
+    device_opts, 
+    use_gpu):
 
     workspace.ResetWorkspace()
 
@@ -310,7 +317,14 @@ if __name__ == '__main__':
     train_x, test_x = normalization(train_x, test_x)
 
     # 3. Start training & save pb files.
-    do_train(epochs=args.epochs, device_opts=device_opts, use_gpu=args.use_gpu)
+    do_train(
+        train_x, 
+        train_y, 
+        test_x, 
+        test_y,
+        epochs=args.epochs, 
+        device_opts=device_opts, 
+        use_gpu=args.use_gpu)
 
     # 4. Do a test if you need
     do_test(test_x, test_y, device_opts)

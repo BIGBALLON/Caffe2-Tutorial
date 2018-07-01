@@ -59,7 +59,6 @@ class ResNetBuilder():
             self.add_spatial_bn(input_filters)
         pre_relu = self.add_relu()
 
-        # 3x3
         self.add_conv(
             input_filters,
             num_filters,

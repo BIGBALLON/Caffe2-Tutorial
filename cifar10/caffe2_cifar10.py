@@ -41,13 +41,13 @@ parser.add_argument('--use_augmentation', type=bool, default=True, metavar='BOOL
                 help='use augmentation or not(default: True)')
 parser.add_argument('--train_images', type=int, default=50000, metavar='NUMBER')
 parser.add_argument('--test_images', type=int, default=10000, metavar='NUMBER')
-
 parser.add_argument('--init_net', type=str, default='./init_net.pb', metavar='STRING')
 parser.add_argument('--predict_net', type=str, default='./predict_net.pb', metavar='STRING')
 
 args = parser.parse_args()
-print("\n=============== Argument ===============")
+print("\n=============== Argument ===============\n")
 print(args)
+print("\n=============== Argument ===============")
 
 def add_sortmax(model, last_out, device_opts):
     with core.DeviceScope(device_opts):
@@ -83,7 +83,7 @@ def add_training_operators(model, last_out, device_opts) :
             model, 
             base_learning_rate=0.1, 
             policy="step", 
-            stepsize=50000 * 80 // args.batch_size, 
+            stepsize=50000 * 50 // args.batch_size, 
             weight_decay=1e-4,
             momentum=0.9, 
             gamma=0.1,
@@ -146,6 +146,7 @@ def train_epoch(model, train_x, train_y):
         workspace.FeedBlob("data", data, device_option=device_opts)
         workspace.FeedBlob("label", label, device_option=device_opts)
         workspace.RunNet(model.net) 
+
         loss_sum += workspace.FetchBlob("loss")
         correct += workspace.FetchBlob("accuracy")
 
@@ -167,6 +168,7 @@ def do_evaluate(model, test_x, test_y):
         workspace.FeedBlob("label", label, device_option=device_opts)
 
         workspace.RunNet(model.net) 
+       
         loss_sum += workspace.FetchBlob("loss")
         correct += workspace.FetchBlob("accuracy")
 
@@ -183,10 +185,7 @@ def do_train(epochs, device_opts, use_gpu) :
     workspace.FeedBlob("data", data, device_option=device_opts)
     workspace.FeedBlob("label", label, device_option=device_opts)
 
-    train_arg_scope = {
-        'order': 'NCHW',
-        'use_cudnn': True,
-    }
+    train_arg_scope = {'order': 'NCHW','use_cudnn': True,}
 
     train_model= model_helper.ModelHelper(name="train_net", arg_scope=train_arg_scope)
     last_out = create_resnet(
@@ -216,10 +215,10 @@ def do_train(epochs, device_opts, use_gpu) :
 
     workspace.RunNetOnce(test_model.param_init_net)
     workspace.CreateNet(test_model.net, overwrite=True)
-    
+
     # print(workspace.Blobs())
 
-    print('\ntraining for', epochs, 'epochs')
+    print('\n== Training for', epochs, 'epochs ==\n')
     columns = ['ep', 'lr', 'tr_loss', 'tr_acc', 'te_loss', 'te_acc', 'time']
 
     for e in range(0, epochs):
@@ -250,10 +249,13 @@ def do_train(epochs, device_opts, use_gpu) :
         else:
             table = table.split('\n')[2]
         print(table)
-    print('training done')
+    print('== Training done. ==')
+
+    print('== Save deploy model ==')
+    save_deploy_model(device_opts)
+    print('== done. ==')
 
 def save_deploy_model(device_opts):
-    
     # save net forward only !!
     deploy_model= model_helper.ModelHelper(name="deploy_net", init_params=False)
     last_out = create_resnet(
@@ -285,13 +287,12 @@ def do_test(test_x, test_y, device_opts):
     workspace.FeedBlob("data", data, device_option=device_opts)
     workspace.RunNet('deploy_net')
 
-    print ('== done. ==')
-
-    print ("\nInput: ones")
-    print ("Output last_out:\n", workspace.FetchBlob("last_out"))
-    print ("Output softmax:\n", workspace.FetchBlob("softmax"))
-    print ("Output class: ", np.argmax(workspace.FetchBlob("softmax"),axis=1))
-    print ("Real class  : ", label)
+    print('== done. ==')
+    print("input shape :", data.shape)
+    # print ("Output last_out:\n", workspace.FetchBlob("last_out"))
+    # print ("Output softmax:\n", workspace.FetchBlob("softmax"))
+    print("Output class: ", np.argmax(workspace.FetchBlob("softmax"),axis=1))
+    print("Real class  : ", label)
 
 if __name__ == '__main__':
 
@@ -310,10 +311,6 @@ if __name__ == '__main__':
 
     # 3. Start training & save pb files.
     do_train(epochs=args.epochs, device_opts=device_opts, use_gpu=args.use_gpu)
-    
-    save_deploy_model(device_opts)
 
     # 4. Do a test if you need
-    do_test(device_opts, test_x, test_y)
-
-
+    do_test(test_x, test_y, device_opts)

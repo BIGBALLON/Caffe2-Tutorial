@@ -1,5 +1,6 @@
 from caffe2.python import core, brew
 
+
 class ResNetBuilder():
 
     def __init__(self, model, prev_blob, no_bias, is_test):
@@ -23,7 +24,7 @@ class ResNetBuilder():
             stride=stride,
             pad=pad,
             no_bias=self.no_bias,
-            )
+        )
         return self.prev_blob
 
     def add_relu(self):
@@ -31,7 +32,7 @@ class ResNetBuilder():
             self.model,
             self.prev_blob,
             self.prev_blob,  # in-place
-            )
+        )
         return self.prev_blob
 
     def add_spatial_bn(self, num_filters):
@@ -42,7 +43,7 @@ class ResNetBuilder():
             num_filters,
             epsilon=1e-3,
             is_test=self.is_test,
-            )
+        )
         return self.prev_blob
 
     def add_simple_block(
@@ -51,7 +52,7 @@ class ResNetBuilder():
         num_filters,
         down_sampling=False,
         spatial_batch_norm=True,
-        ):
+    ):
         self.comp_idx = 0
         shortcut_blob = self.prev_blob
 
@@ -65,7 +66,7 @@ class ResNetBuilder():
             kernel=3,
             stride=(1 if down_sampling is False else 2),
             pad=1,
-            )
+        )
 
         if spatial_batch_norm:
             self.add_spatial_bn(num_filters)
@@ -85,15 +86,16 @@ class ResNetBuilder():
                 kernel=1,
                 stride=(1 if down_sampling is False else 2),
                 no_bias=self.no_bias,
-                )
+            )
 
         self.prev_blob = brew.sum(
-            self.model, 
+            self.model,
             [shortcut_blob, last_conv],
             'comp_%d_sum_%d' % (self.comp_count, self.comp_idx),
-            )
+        )
         self.comp_idx += 1
         self.comp_count += 1
+
 
 def create_resnet(
     model, data,
@@ -102,10 +104,11 @@ def create_resnet(
     num_labels,
     device_opts,
     is_test=False,
-    ):
+):
     with core.DeviceScope(device_opts):
         filters = [16, 32, 64]
-        brew.conv(model, data, 'conv1', num_input_channels, 16, no_bias=1, kernel=3, stride=1, pad=1)
+        brew.conv(model, data, 'conv1', num_input_channels,
+                  16, no_bias=1, kernel=3, stride=1, pad=1)
 
         builder = ResNetBuilder(model, 'conv1', no_bias=1, is_test=is_test)
 
@@ -115,19 +118,19 @@ def create_resnet(
 
         # input: 32x32x16 output: 16x16x32
         builder.add_simple_block(16, 32, down_sampling=True)
-        for _ in range(1,num_groups):
+        for _ in range(1, num_groups):
             builder.add_simple_block(32, 32, down_sampling=False)
 
         # input: 16x16x32 output: 8x8x64
         builder.add_simple_block(32, 64, down_sampling=True)
-        for _ in range(1,num_groups):
+        for _ in range(1, num_groups):
             builder.add_simple_block(64, 64, down_sampling=False)
 
-        brew.spatial_bn(model, builder.prev_blob, 'last_spatbn', 64, epsilon=1e-3, is_test=is_test)
+        brew.spatial_bn(model, builder.prev_blob, 'last_spatbn',
+                        64, epsilon=1e-3, is_test=is_test)
         brew.relu(model, 'last_spatbn', 'last_relu')
         # Final layers
         brew.average_pool(model, 'last_relu', 'final_avg', kernel=8, stride=1)
         last_out = brew.fc(model, 'final_avg', 'last_out', 64, num_labels)
-        
-        return last_out
 
+        return last_out

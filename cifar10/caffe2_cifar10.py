@@ -79,6 +79,7 @@ def add_training_operators(model, last_out, device_opts) :
         accuracy = add_accuracy(model, softmax, device_opts)
 
         model.AddGradientOperators([loss])
+        
         opt = optimizer.build_sgd(
             model, 
             base_learning_rate=0.1, 
@@ -106,7 +107,6 @@ def save_net(init_net_pb, predict_net_pb, model):
             extra_params.append(name)
             extra_blobs.append(workspace.FetchBlob(name))
     for name, blob in zip(extra_params, extra_blobs):
-        workspace.FeedBlob(name, blob)
         model.params.append(name)
 
     init_net, predict_net = mobile_exporter.Export(

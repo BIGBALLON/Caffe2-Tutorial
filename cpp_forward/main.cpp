@@ -70,7 +70,7 @@ void loadImage(std::string file_name, float* imgArray){
         
     for(auto i = 0; i < data.size();++i){
         if(i > 0 && i % (32*32) == 0) dim++;
-        imgArray[i] = (data[i] - image_std[dim]) / image_mean[dim];
+        imgArray[i] = (data[i] - image_mean[dim]) / image_std[dim];
         // std::cout << imgArray[i] << std::endl;
     }
 }

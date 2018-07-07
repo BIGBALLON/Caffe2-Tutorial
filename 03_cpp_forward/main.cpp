@@ -15,7 +15,7 @@
 
 // feel free to define USE_GPU if you want to use gpu
 
-// #define USE_GPU
+#define USE_GPU
 
 
 #ifdef USE_GPU
@@ -31,9 +31,9 @@
 #include <map>
 
 // define flags
-CAFFE2_DEFINE_string(init_net, "./init_net.pb",
+CAFFE2_DEFINE_string(init_net, "./init_net55.pb",
                      "The given path to the init protobuffer.");
-CAFFE2_DEFINE_string(predict_net, "./predict_net.pb",
+CAFFE2_DEFINE_string(predict_net, "./predict_net55.pb",
                      "The given path to the predict protobuffer.");
 CAFFE2_DEFINE_string(file, "./image_file.jpg", "The image file.");
 
@@ -103,11 +103,14 @@ void run(){
     }
 #endif
 
+    std::cout << "\nDEBUG1" << std::endl;
     // load network
     CAFFE_ENFORCE(workSpace.RunNetOnce(initNet));
     CAFFE_ENFORCE(workSpace.CreateNet(predictNet));
 
     // load image from file, then convert it to float array.
+    std::cout << "\nDEBUG2" << std::endl;
+
     float imgArray[3 * 32 * 32];
     loadImage(FLAGS_file, imgArray);
 
@@ -118,25 +121,27 @@ void run(){
 
     // get "data" blob
 #ifdef USE_GPU
-    auto data = workSpace.GetBlob("data")->GetMutable<TensorCUDA>();
+    auto data = workSpace.GetBlob("gpu_0/data")->GetMutable<TensorCUDA>();
 #else
-    auto data = workSpace.GetBlob("data")->GetMutable<TensorCPU>();
+    auto data = workSpace.GetBlob("gpu_0/data")->GetMutable<TensorCPU>();
 #endif
 
     // copy from input data
     data->CopyFrom(input);
+    std::cout << "\nDEBUG3" << std::endl;
 
     // forward
     workSpace.RunNet(predictNet.name());
+    std::cout << "\nDEBUG4" << std::endl;
 
     // get softmax blob and show the results
     std::vector<std::string> labelName = {"airplane","automobile","bird","cat","deer",
         "dog","frog","horse","ship","truck"};
 
 #ifdef USE_GPU
-    auto softmax = TensorCPU(workSpace.GetBlob("softmax")->Get<TensorCUDA>());
+    auto softmax = TensorCPU(workSpace.GetBlob("gpu_0/softmax")->Get<TensorCUDA>());
 #else
-    auto softmax = workSpace.GetBlob("softmax")->Get<TensorCPU>();
+    auto softmax = workSpace.GetBlob("gpu_0/softmax")->Get<TensorCPU>();
 #endif
 
     std::vector<float> probs(softmax.data<float>(),

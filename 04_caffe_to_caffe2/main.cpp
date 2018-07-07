@@ -12,11 +12,7 @@
 #include "caffe2/core/tensor.h"
 #include "caffe2/core/init.h"
 
-
-// feel free to define USE_GPU if you want to use gpu
-
-// #define USE_GPU
-
+#define USE_GPU
 
 #ifdef USE_GPU
 #include "caffe2/core/context_gpu.h"

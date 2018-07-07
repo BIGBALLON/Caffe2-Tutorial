@@ -27,12 +27,12 @@ import argparse
 import numpy as np
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--depths', type=int, default=5, metavar='NUMBER',
+                    help='the depth of network(default: 5) [total layers = depth * 6 + 2]')
 parser.add_argument('--batch_size', type=int, default=128, metavar='NUMBER',
                     help='batch size(default: 128)')
 parser.add_argument('--epochs', type=int, default=200, metavar='NUMBER',
                     help='epochs(default: 200)')
-parser.add_argument('--depths', type=int, required=True, metavar='NUMBER',
-                    help='the depth of network(required) [total layers = depth * 6 + 2]')
 parser.add_argument('--eval_freq', type=int, default=1, metavar='NUMBER',
                     help='the number of evaluate interval')
 parser.add_argument('--use_gpu', type=bool, default=True, metavar='BOOL',

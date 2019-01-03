@@ -7,30 +7,28 @@ import time
 import pickle
 import random
 import numpy as np
-
-CLASS_NUM = 10
-IMAGE_SIZE = 32
-IMG_CHANNELS = 3
+import config
 
 
 def dummy_input():
-    data = np.zeros((1, IMG_CHANNELS, IMAGE_SIZE, IMAGE_SIZE))
+    data = np.zeros(
+        (1, config.IMG_CHANNELS, config.IMAGE_SIZE, config.IMAGE_SIZE))
     label = 1
     return np.array(data).astype('float32'), np.array(label).astype('int32')
 
 # Get the batch in order
 
 
-def next_batch(i, batch_size, data, labels, total_size=50000):
+def next_batch(i, batch_size, data, labels, total_size=config.TRAIN_IMAGES):
     index = i * batch_size
-    if index + batch_size < total_size:
+    if index + batch_size <= total_size:
         batch_x = data[index:index + batch_size]
         batch_y = labels[index:index + batch_size]
     else:
         batch_x = data[index:]
         batch_y = labels[index:]
     return batch_x, batch_y
-    
+
 
 def next_batch_random(batch_size, data, labels):
     idx = np.arange(0, len(data))
@@ -97,14 +95,14 @@ def load_data_one(file):
 
 
 def load_data(files, data_dir, label_count):
-    global IMAGE_SIZE, IMG_CHANNELS
     data, labels = load_data_one(data_dir + '/' + files[0])
     for f in files[1:]:
         data_n, labels_n = load_data_one(data_dir + '/' + f)
         data = np.append(data, data_n, axis=0)
         labels = np.append(labels, labels_n, axis=0)
     # NCHW
-    data = data.reshape([-1, IMG_CHANNELS, IMAGE_SIZE, IMAGE_SIZE])
+    data = data.reshape(
+        [-1, config.IMG_CHANNELS, config.IMAGE_SIZE, config.IMAGE_SIZE])
     labels = np.asarray(labels).astype('int32')
     # BGR
     data = data[:, (2, 1, 0), :, :]

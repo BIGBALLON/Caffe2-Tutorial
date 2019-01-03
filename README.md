@@ -4,10 +4,28 @@ This repository is a simple tutorial about how to use caffe2 with both C++ and p
 
 ## Contents
 
-1. [Introduction](#introduction)
-2. [Build](#build)
-3. [Usage](#usage)
-4. [Contact](#contact)
+1. [Requirements](#requirements)
+2. [Introduction](#introduction)
+3. [Build](#build)
+4. [Usage](#usage)
+5. [Contact](#contact)
+
+
+## Requirements
+
+- caffe2 (tag: pytorch v0.4.0)
+- opencv-python
+- tabulate
+
+If you want to save the graph, try to install the following packages if you need
+
+```
+sudo apt install python-pydot python-pydot-ng graphviz -y
+sudo pip3 install pydot
+```
+
+**All of the codes have been tested in version ``tag: pytorch v0.4.0``.**  
+**tag 0.4.1 or 1.0 can not build the code correclty, try to modify them if you must use the latest version.**  
 
 ## Introduction
 
@@ -44,9 +62,6 @@ This tutorial contains 4 parts:
 
 **Skip this part if you have successfully installed caffe2**, otherwise you can refer to my [installation steps](https://gist.github.com/BIGBALLON/c428cb75767d40e92be667ee20c4f0c1):
 
-
-**All of the codes have been tested in version ``tag: pytorch v0.4.0``.**  
-**tag 0.4.1 or 1.0 can not build demo3 and demo4 correclty.**  
 
 
 ```

@@ -4,44 +4,44 @@
 from caffe2.proto import caffe2_pb2
 from caffe2.python.predictor import mobile_exporter
 from caffe2.python import (
-    workspace,
     core,
-    model_helper,
     brew,
-    optimizer,
     utils,
+    workspace,
+    model_helper,
+    optimizer,
     net_drawer,
 )
 from data_utility import (
-    data_augmentation,
     prepare_data,
-    normalization,
     next_batch,
-    next_batch_random,
     dummy_input,
+    normalization,
+    next_batch_random,
+    data_augmentation,
 )
 from models import create_resnet
 import time
 import tabulate
 import argparse
 import numpy as np
+import config
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--depths', type=int, default=5, metavar='NUMBER',
-                    help='the depth of network(default: 5) [total layers = depth * 6 + 2]')
+parser = argparse.ArgumentParser(description='Caffe2 CIFAR-10 DEMO CODE')
+parser.add_argument('--groups', type=int, default=3, metavar='NUMBER',
+                    help='the depth of network(default: 3) [total layers = groups * 6 + 2]')
+parser.add_argument('--learning_rate', type=float, default=0.1, metavar='NUMBER',
+                    help='learning rate(default: 0.1)')
 parser.add_argument('--batch_size', type=int, default=128, metavar='NUMBER',
                     help='batch size(default: 128)')
 parser.add_argument('--epochs', type=int, default=200, metavar='NUMBER',
                     help='epochs(default: 200)')
-parser.add_argument('--eval_freq', type=int, default=1, metavar='NUMBER',
-                    help='the number of evaluate interval')
+parser.add_argument('--eval_freq', type=int, default=4, metavar='NUMBER',
+                    help='the number of evaluate interval(default: 4)')
 parser.add_argument('--use_gpu', type=bool, default=True, metavar='BOOL',
                     help='use gpu or not (default: True)')
 parser.add_argument('--use_augmentation', type=bool, default=True, metavar='BOOL',
                     help='use augmentation or not(default: True)')
-parser.add_argument('--train_images', type=int,
-                    default=50000, metavar='NUMBER')
-parser.add_argument('--test_images', type=int, default=10000, metavar='NUMBER')
 parser.add_argument('--init_net', type=str,
                     default='./init_net.pb', metavar='STRING')
 parser.add_argument('--predict_net', type=str,
@@ -68,8 +68,7 @@ def add_softmax_with_loss(model, last_out, device_opts):
 
 def add_accuracy(model, softmax, device_opts):
     with core.DeviceScope(device_opts):
-        accuracy = brew.accuracy(model, [softmax, "label"], "accuracy")
-        return accuracy
+        return brew.accuracy(model, [softmax, "label"], "accuracy")
 
 
 def get_lr_blob_name(opt, use_gpu):
@@ -85,20 +84,22 @@ def add_training_operators(model, last_out, device_opts):
     with core.DeviceScope(device_opts):
 
         softmax, loss = add_softmax_with_loss(model, last_out, device_opts)
-        accuracy = add_accuracy(model, softmax, device_opts)
+        _ = add_accuracy(model, softmax, device_opts)
 
         model.AddGradientOperators([loss])
 
+        stepsz = int(60 * config.TRAIN_IMAGES / args.batch_size)
         opt = optimizer.build_sgd(
             model,
-            base_learning_rate=0.1,
+            base_learning_rate=args.learning_rate,
             policy="step",
-            stepsize=50000 * 80 // args.batch_size,
+            stepsize=stepsz,
+            gamma=0.1,
             weight_decay=1e-4,
             momentum=0.9,
-            gamma=0.1,
             nesterov=1,
         )
+
         # [Optional] feel free to use adam or other optimizers
         # opt = optimizer.build_adam(
         #     model,
@@ -109,22 +110,16 @@ def add_training_operators(model, last_out, device_opts):
 
 
 def save_net(init_net_pb, predict_net_pb, model):
-    extra_params = []
-    extra_blobs = []
-    for blob in workspace.Blobs():
-        name = str(blob)
-        if name.endswith("_rm") or name.endswith("_riv"):
-            extra_params.append(name)
-            extra_blobs.append(workspace.FetchBlob(name))
-    for name, blob in zip(extra_params, extra_blobs):
+    extra_params = [b for b in workspace.blobs if b.endswith(
+        "_rm") or b.endswith("_riv")]
+    for name in extra_params:
         model.params.append(name)
 
-    init_net, predict_net = mobile_exporter.Export(
+    init_net, _ = mobile_exporter.Export(
         workspace,
         model.net,
         model.params
     )
-
     with open(predict_net_pb, 'wb') as f:
         f.write(model.net._net.SerializeToString())
     with open(init_net_pb, 'wb') as f:
@@ -143,14 +138,15 @@ def load_net(init_net_pb, predict_net_pb, device_opts):
         net_def.ParseFromString(f.read())
         net_def.device_option.CopyFrom(device_opts)
         workspace.CreateNet(net_def.SerializeToString(), overwrite=True)
+    # return network's name ('deploy')
+    return net_def.name
 
 
-def train_epoch(model, train_x, train_y):
+def train_one_epoch(model, train_x, train_y):
     loss_sum = 0.0
     correct = 0.0
-    batch_num = args.train_images // args.batch_size + 1
-    for i in range(0, batch_num):
-        # data, label = next_batch(i, args.batch_size, train_x, train_y, args.train_images)
+    batch_num = config.TRAIN_IMAGES // args.batch_size + 1
+    for _ in range(0, batch_num):
         data, label = next_batch_random(args.batch_size, train_x, train_y)
         if args.use_augmentation:
             data = data_augmentation(data)
@@ -168,15 +164,14 @@ def train_epoch(model, train_x, train_y):
     }
 
 
-def do_evaluate(model, test_x, test_y):
+def do_evaluate(model, test_x, test_y, device_opts):
     loss_sum = 0.0
     correct = 0.0
-    batch_num = args.test_images // 200
+    batch_num = config.TEST_IMAGES // 200
 
     for i in range(0, batch_num):
-        # data, label = next_batch(i, 1000, test_x, test_y, args.test_images)
-        data, label = next_batch_random(200, test_x, test_y)
-
+        data, label = next_batch(
+            i, 200, test_x, test_y, config.TEST_IMAGES)
         workspace.FeedBlob("data", data, device_option=device_opts)
         workspace.FeedBlob("label", label, device_option=device_opts)
 
@@ -196,12 +191,8 @@ def do_train(
         train_y,
         test_x,
         test_y,
-        epochs,
-        device_opts,
-        use_gpu
+        device_opts
 ):
-
-    workspace.ResetWorkspace()
 
     data, label = dummy_input()
     workspace.FeedBlob("data", data, device_option=device_opts)
@@ -214,9 +205,9 @@ def do_train(
     last_out = create_resnet(
         model=train_model,
         data='data',
-        num_input_channels=3,
-        num_groups=args.depths,
-        num_labels=10,
+        num_input_channels=config.IMG_CHANNELS,
+        num_groups=args.groups,
+        num_labels=config.CLASS_NUM,
         device_opts=device_opts,
         is_test=False
     )
@@ -227,13 +218,13 @@ def do_train(
     last_out = create_resnet(
         model=test_model,
         data='data',
-        num_input_channels=3,
-        num_groups=args.depths,
-        num_labels=10,
+        num_input_channels=config.IMG_CHANNELS,
+        num_groups=args.groups,
+        num_labels=config.CLASS_NUM,
         device_opts=device_opts,
         is_test=True
     )
-    softmax, loss = add_softmax_with_loss(test_model, last_out, device_opts)
+    softmax, _ = add_softmax_with_loss(test_model, last_out, device_opts)
     add_accuracy(test_model, softmax, device_opts)
 
     workspace.RunNetOnce(train_model.param_init_net)
@@ -244,21 +235,22 @@ def do_train(
 
     # print(workspace.Blobs())
 
-    print('\n== Training for', epochs, 'epochs ==\n')
+    print('\n== Training for', args.epochs, 'epochs ==\n')
     columns = ['ep', 'lr', 'tr_loss', 'tr_acc', 'te_loss', 'te_acc', 'time']
 
-    for e in range(0, epochs):
+    for e in range(0, args.epochs):
+
         time_ep = time.time()
 
-        train_res = train_epoch(train_model, train_x, train_y)
+        train_res = train_one_epoch(train_model, train_x, train_y)
 
-        if e == 0 or e % args.eval_freq == 0 or e == epochs - 1:
-            test_res = do_evaluate(test_model, test_x, test_y)
+        if e == 0 or e % args.eval_freq == 0 or e == args.epochs - 1:
+            test_res = do_evaluate(test_model, test_x, test_y, device_opts)
         else:
             test_res = {'loss': None, 'accuracy': None}
 
         time_ep = time.time() - time_ep
-        lr = get_lr_blob_name(opt, use_gpu)
+        lr = get_lr_blob_name(opt, args.use_gpu)
         values = [
             e + 1,
             lr,
@@ -270,7 +262,7 @@ def do_train(
         ]
         table = tabulate.tabulate(
             [values], columns, tablefmt='simple', floatfmt='8.4f')
-        if e % 40 == 0:
+        if e % 25 == 0:
             table = table.split('\n')
             table = '\n'.join([table[1]] + table)
         else:
@@ -280,7 +272,7 @@ def do_train(
 
     print('== Save deploy model ==')
     save_deploy_model(device_opts)
-    print('== done. ==')
+    print('== Done. ==')
 
 
 def save_deploy_model(device_opts):
@@ -290,9 +282,9 @@ def save_deploy_model(device_opts):
     last_out = create_resnet(
         model=deploy_model,
         data='data',
-        num_input_channels=3,
-        num_groups=args.depths,
-        num_labels=10,
+        num_input_channels=config.IMG_CHANNELS,
+        num_groups=args.groups,
+        num_labels=config.CLASS_NUM,
         device_opts=device_opts,
         is_test=True)
     add_sortmax(deploy_model, last_out, device_opts)
@@ -300,9 +292,15 @@ def save_deploy_model(device_opts):
     workspace.RunNetOnce(deploy_model.param_init_net)
     workspace.CreateNet(deploy_model.net, overwrite=True)
 
+    #
     # save network images
-    graph = net_drawer.GetPydotGraphMinimal(deploy_model)
-    graph.write_svg('net.svg')
+    # try to install the following packages if you need
+    # sudo apt install python-pydot python-pydot-ng graphviz -y
+    # sudo pip3 install pydot
+    #
+
+    # graph = net_drawer.GetPydotGraphMinimal(deploy_model)
+    # graph.write_svg('net.svg')
 
     save_net(args.init_net, args.predict_net, deploy_model)
 
@@ -310,24 +308,28 @@ def save_deploy_model(device_opts):
 def do_test(test_x, test_y, device_opts):
     print('\n== loading deploy model to test ==')
     workspace.ResetWorkspace()
-    load_net(args.init_net, args.predict_net, device_opts=device_opts)
+    net_name = load_net(args.init_net, args.predict_net,
+                        device_opts=device_opts)
 
     test_batch = 10
     data, label = next_batch_random(test_batch, test_x, test_y)
     workspace.FeedBlob("data", data, device_option=device_opts)
-    workspace.RunNet('deploy_net')
+    workspace.RunNet(net_name)
 
     print('== done. ==')
     print("input shape :", data.shape)
+    # feel free to see the result
     # print ("Output last_out:\n", workspace.FetchBlob("last_out"))
     # print ("Output softmax:\n", workspace.FetchBlob("softmax"))
     print("Output class: ", np.argmax(workspace.FetchBlob("softmax"), axis=1))
     print("Real class  : ", label)
 
+
 if __name__ == '__main__':
 
     # 1. Set global init level & Device Option: CUDA or CPU
     core.GlobalInit(['caffe2', '--caffe2_log_level=0'])
+    workspace.ResetWorkspace()
     if args.use_gpu:
         device_opts = core.DeviceOption(caffe2_pb2.CUDA, 0)
     else:
@@ -345,9 +347,7 @@ if __name__ == '__main__':
         train_y,
         test_x,
         test_y,
-        epochs=args.epochs,
-        device_opts=device_opts,
-        use_gpu=args.use_gpu
+        device_opts,
     )
 
     # 4. Do a test if you need

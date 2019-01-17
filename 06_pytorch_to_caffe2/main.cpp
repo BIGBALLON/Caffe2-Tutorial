@@ -25,6 +25,7 @@
 #include <string>
 #include <iostream>
 #include <map>
+#include <cmath>
 
 // define flags
 #define IMAGE_SIZE 224
@@ -65,11 +66,12 @@ void loadImage(std::string file_name, float* imgArray){
     
     // do normalization & copy to imgArray
     int dim = 0;
-    float image_mean[3] = {103.939, 116.779, 123.68};
+    float image_std[3] = {0.225, 0.224, 0.229};
+    float image_mean[3] = {0.406, 0.456, 0.485};
         
     for(auto i = 0; i < data.size();++i){
         if(i > 0 && i % (IMAGE_SIZE * IMAGE_SIZE) == 0) dim++;
-        imgArray[i] = data[i] - image_mean[dim];
+        imgArray[i] = (data[i]/255.0f - image_mean[dim]) - image_std[dim];
     }
 }
 
@@ -81,6 +83,7 @@ void run(){
     // define initNet and predictNet
     NetDef initNet, predictNet;
 
+    workSpace.CreateBlob("0");
     // read protobuf
     CAFFE_ENFORCE(ReadProtoFromFile(FLAGS_init_net, &initNet));
     CAFFE_ENFORCE(ReadProtoFromFile(FLAGS_predict_net, &predictNet));
@@ -116,9 +119,9 @@ void run(){
 
     // get "data" blob
 #ifdef USE_GPU
-    auto data = workSpace.GetBlob("data")->GetMutable<TensorCUDA>();
+    auto data = workSpace.GetBlob("0")->GetMutable<TensorCUDA>();
 #else
-    auto data = workSpace.GetBlob("data")->GetMutable<TensorCPU>();
+    auto data = workSpace.GetBlob("0")->GetMutable<TensorCPU>();
 #endif
 
     // copy from input data
@@ -128,19 +131,23 @@ void run(){
     workSpace.RunNet(predictNet.name());
 
 #ifdef USE_GPU
-    auto softmax = TensorCPU(workSpace.GetBlob("prob")->Get<TensorCUDA>());
+    auto output = TensorCPU(workSpace.GetBlob("503")->Get<TensorCUDA>());
 #else
-    auto softmax = workSpace.GetBlob("prob")->Get<TensorCPU>();
+    auto output = workSpace.GetBlob("503")->Get<TensorCPU>();
 #endif
 
-    std::vector<float> probs(softmax.data<float>(),
-        softmax.data<float>() + softmax.size());
+    std::vector<float> probs(output.data<float>(),
+        output.data<float>() + output.size());
     
     auto max = std::max_element(probs.begin(), probs.end());
+
+    float total_sum = 0.0f;
+    for(auto p: probs) total_sum += exp(p);
+
     auto index = std::distance(probs.begin(), max);
     std::cout << "== predicted label: " << index
               << " == \n== label name: " << labelToName(index)
-              << " ==\n== with probability: " << (*max * 100)
+              << " ==\n== with acc: " << exp((*max)) / total_sum * 100.0f
               << "% ==" << std::endl;
 }
 

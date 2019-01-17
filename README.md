@@ -24,18 +24,23 @@ sudo apt install python-pydot python-pydot-ng graphviz -y
 sudo pip3 install pydot
 ```
 
+###  Attention
+
 **All of the codes have been tested in version ``tag: pytorch v0.4.0``.**  
-**tag 0.4.1 or 1.0 can not build the code correclty, try to modify them if you must use the latest version.**  
+**tag 0.4.1 or 1.0 can not build the code correclty,**  
+**you need to modify them if you must use the latest version.**  
 
 ## Introduction
 
-This tutorial contains 4 parts:
+This tutorial contains 6 parts:
 
 ```
 ├─ 01_mnist  
 ├─ 02_cifar10  
 ├─ 03_cpp_forward  
-└─ 04_caffe_to_caffe2       
+└─ 04_caffe_to_caffe2
+└─ 05_cifar10_multi_gpu
+└─ 06_pytorch_to_caffe2
 ```
 
 - ``01_mnist`` will show you 
@@ -52,6 +57,11 @@ This tutorial contains 4 parts:
     - then we will use the C++ program to predict real images
 - ``04_caffe_to_caffe2`` will show you 
     -  how to convert caffe model to caffe2 model 
+    -  then load it by C++ to predict real images
+- ``05_cifar10_multi_gpu`` will show you
+    -  how to train model with multiple gpus 
+- ``06_pytorch_to_caffe2`` will show you 
+    -  how to convert pytorch model to onnx model, and convert onnx model to caffe2
     -  then load it by C++ to predict real images
 
 ## Build 
@@ -315,7 +325,7 @@ cd ../
 ```
 == image size: [950 x 600] ==
 == simply resize: [224 x 224] ==
-== predicted label: 779==
+== predicted label: 779 ==
 == label name: school bus ==
 == with probability: 99.9992% ==
 ```
@@ -327,7 +337,7 @@ cd ../
 ```
 == image size: [1000 x 664] ==
 == simply resize: [224 x 224] ==
-== predicted label: 248==
+== predicted label: 248 ==
 == label name: Eskimo dog, husky ==
 == with probability: 72.7978% ==
 ```
@@ -339,7 +349,7 @@ cd ../
 ```
 == image size: [319 x 279] ==
 == simply resize: [224 x 224] ==
-== predicted label: 340==
+== predicted label: 340 ==
 == label name: zebra ==
 == with probability: 99.8892% ==
 ```
@@ -351,12 +361,54 @@ cd ../
 ```
 == image size: [800 x 500] ==
 == simply resize: [224 x 224] ==
-== predicted label: 3==
+== predicted label: 3 ==
 == label name: tiger shark, Galeocerdo cuvieri ==
 == with probability: 76.2018% ==
 ```
 
 Feel free to change the test images, it's fun. :smile:
+
+
+###  05_cifar10_multi_gpu
+
+The most important point in multi-gpu training is ``data_parallel_model.Parallelize_GPU``,  
+The key is to split your model creation code to three functions. 
+check [SynchronousSGD](https://caffe2.ai/docs/SynchronousSGD.html) for more details.
+
+### 06_pytorch_to_caffe2
+
+Now, let us try to convert pytorch model to caffe2 model.  
+We will use the tool [ONNX(Open Neural Network Exchange)](https://github.com/onnx).
+
+First, run ``pytorch2onnx.py``, donwload a pytorch model resnet50, convert it to onnx model.  
+Then, run ``onnx2caffe2.py`` convert the onnx model to caffe2 model.
+
+```
+python3 onnx2caffe2.py --onnx-model ONNX_MODEL \
+--caffe2-init CAFFE2_INIT \
+--caffe2-predict CAFFE2_PREDICT
+
+```
+We will get three files: ``onnx-predict.pbtxt``, 
+
+```
+init_net.pb             %[converted init weights]
+predict_net.pb          %[converted net]
+onnx-predict.pbtxt      %[converted pb txt]
+```
+
+Modify the ``main.cpp``, then compile it by cmake.
+
+```
+./classifier --file ./test_img/school_bus.jpg
+
+== image size: [950 x 600] ==
+== simply resize: [224 x 224] ==
+== predicted label: 779 == 
+== label name: school bus ==
+== with acc: 70.0677% ==
+
+```
 
 
 ## Contact

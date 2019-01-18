@@ -38,8 +38,8 @@ This tutorial contains 6 parts:
 ├─ 01_mnist  
 ├─ 02_cifar10  
 ├─ 03_cpp_forward  
-└─ 04_caffe_to_caffe2
-└─ 05_cifar10_multi_gpu
+├─ 04_caffe_to_caffe2
+├─ 05_cifar10_multi_gpu
 └─ 06_pytorch_to_caffe2
 ```
 

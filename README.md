@@ -1,3 +1,5 @@
+Status: Archive (caffe2 is no longer maintained independently and the [official website](https://caffe2.ai/) is closed, so this project is provided as-is)
+
 # Caffe2 Tutorial
 
 This repository is a simple tutorial about how to use caffe2 with both C++ and python. 
